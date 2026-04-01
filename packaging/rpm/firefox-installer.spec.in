@@ -1,0 +1,34 @@
+Name:           firefox-installer
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        Distro-aware Firefox installer for Linux
+License:        MIT
+URL:            https://github.com/SilentGlasses/firefresh
+Source0:        %{name}-%{version}.tar.gz
+BuildArch:      noarch
+Requires:       python3 >= 3.8
+
+%description
+Install Firefox from Mozilla binaries with distro-aware package removal.
+
+%prep
+%autosetup
+
+%build
+# Nothing to build for this pure-Python package.
+
+%install
+mkdir -p %{buildroot}/usr/lib/firefox-installer/src/firefox_installer_app
+mkdir -p %{buildroot}/usr/bin
+install -m 0644 src/firefox_installer_app/*.py %{buildroot}/usr/lib/firefox-installer/src/firefox_installer_app/
+install -m 0755 packaging/common/firefox-installer-launcher %{buildroot}/usr/bin/firefox-installer
+
+%files
+%license LICENSE
+%doc README.md
+/usr/bin/firefox-installer
+/usr/lib/firefox-installer/src/firefox_installer_app
+
+%changelog
+* Mon Mar 30 2026 silentglasses <silentglasses@proton.me> - @VERSION@-1
+- Local packaging scaffold added.

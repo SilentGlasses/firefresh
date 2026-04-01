@@ -1,0 +1,197 @@
+name: Release Packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+concurrency:
+  group: release-packages-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  python-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Build Python package artifacts
+        run: |
+          set -euo pipefail
+          python3 -m pip install --upgrade pip
+          python3 -m pip install build
+          python3 -m build --sdist --wheel
+
+      - name: Upload Python package artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: python-release-artifacts
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+          retention-days: 30
+
+  deb-aur-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065
+        with:
+          python-version: "3.11"
+
+      - name: Preflight metadata and script checks
+        run: |
+          set -euo pipefail
+          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation || {
+            echo "Placeholder metadata found in packaging or automation helpers."
+            exit 1
+          }
+          bash -n automation/*.sh
+
+      - name: Build DEB and AUR artifacts
+        run: |
+          set -euo pipefail
+          make package-deb
+          make package-aur
+
+      - name: Smoke test DEB and AUR artifacts
+        run: |
+          set -euo pipefail
+          bash automation/test_packages.sh
+
+      - name: Upload DEB and AUR artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: deb-aur-release-artifacts
+          path: |
+            dist/*.deb
+            dist/aur/*
+          if-no-files-found: error
+          retention-days: 30
+
+  rpm-artifacts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: fedora:41
+
+    steps:
+      - name: Install dependencies
+        run: |
+          set -euo pipefail
+          dnf -y install git make python3 python3-pip rpm-build findutils tar gzip coreutils
+
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+
+      - name: Preflight metadata and script checks
+        run: |
+          set -euo pipefail
+          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation || {
+            echo "Placeholder metadata found in packaging or automation helpers."
+            exit 1
+          }
+          bash -n automation/*.sh
+
+      - name: Build RPM artifact
+        run: |
+          set -euo pipefail
+          make package-rpm
+
+      - name: Smoke test RPM artifact
+        run: |
+          set -euo pipefail
+          bash automation/test_packages.sh
+
+      - name: Upload RPM artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: rpm-release-artifacts
+          path: dist/*.rpm
+          if-no-files-found: error
+          retention-days: 30
+
+  publish-release:
+    needs:
+      - python-artifacts
+      - deb-aur-artifacts
+      - rpm-artifacts
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Download Python artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: python-release-artifacts
+          path: dist/
+
+      - name: Download DEB and AUR artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: deb-aur-release-artifacts
+          path: dist/
+
+      - name: Download RPM artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: rpm-release-artifacts
+          path: dist/
+
+      - name: Verify release files
+        run: |
+          set -euo pipefail
+          ls -R dist
+
+      - name: Upload aggregated workflow artifacts
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-packages
+          path: dist/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Attest release artifacts
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+        with:
+          subject-path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.whl
+            dist/*.tar.gz
+            dist/aur/*
+
+      - name: Publish release assets (tag builds)
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
+        with:
+          files: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.whl
+            dist/*.tar.gz
+            dist/aur/*

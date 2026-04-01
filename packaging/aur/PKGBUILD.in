@@ -1,0 +1,19 @@
+pkgname=firefox-installer
+pkgver=@VERSION@
+pkgrel=1
+pkgdesc="Distro-aware Firefox installer for Linux"
+arch=('any')
+url="https://github.com/SilentGlasses/firefresh"
+license=('MIT')
+depends=('python')
+source=("${pkgname}-${pkgver}.tar.gz")
+sha256sums=('@SHA256@')
+
+package() {
+  cd "${srcdir}/${pkgname}-${pkgver}"
+  install -d "${pkgdir}/usr/lib/firefox-installer/src/firefox_installer_app"
+  install -d "${pkgdir}/usr/bin"
+  install -Dm644 src/firefox_installer_app/*.py "${pkgdir}/usr/lib/firefox-installer/src/firefox_installer_app/"
+  install -Dm755 packaging/common/firefox-installer-launcher "${pkgdir}/usr/bin/firefox-installer"
+  install -Dm644 LICENSE "${pkgdir}/usr/share/licenses/${pkgname}/LICENSE"
+}

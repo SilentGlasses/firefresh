@@ -1,0 +1,9 @@
+# Default ownership for the repository.
+* @SilentGlasses
+
+# Sensitive automation and packaging paths.
+/.github/workflows/ @SilentGlasses
+/packaging/ @SilentGlasses
+/automation/ @SilentGlasses
+/pyproject.toml @SilentGlasses
+/SECURITY.md @SilentGlasses

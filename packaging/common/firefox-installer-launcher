@@ -1,0 +1,3 @@
+#!/bin/sh
+set -eu
+PYTHONPATH=/usr/lib/firefox-installer/src exec /usr/bin/python3 -m firefox_installer_app.cli "$@"

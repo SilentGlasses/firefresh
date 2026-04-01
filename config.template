@@ -1,0 +1,37 @@
+# Firefox Installer Configuration Template
+# This file can be used to customize the Firefox installation
+
+# Installation Configuration
+INSTALL_PREFIX = "/opt/firefox"  # Where to install Firefox
+SYMLINK_PATH = "/usr/local/bin/firefox"  # System-wide symlink location
+DESKTOP_FILE_PATH = "/usr/share/applications/firefox-custom.desktop"  # Desktop integration
+
+# Download Configuration
+# Latest Firefox from Mozilla
+FIREFOX_DOWNLOAD_URL = "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=en-US"
+
+# To use a different language, change the lang parameter:
+# FIREFOX_DOWNLOAD_URL = "https://download.mozilla.org/?product=firefox-latest-ssl&os=linux64&lang=fr"
+# Supported languages: en-US, fr, de, es-ES, it, ja, etc.
+
+# Common Languages
+# - English (US):    en-US
+# - French:          fr
+# - German:          de
+# - Spanish:         es-ES
+# - Italian:         it
+# - Japanese:        ja
+# - Simplified Chinese: zh-CN
+# - Traditional Chinese: zh-TW
+# - Russian:         ru
+# - Portuguese (BR): pt-BR
+
+# Logging Configuration
+LOG_LEVEL = "INFO"  # DEBUG, INFO, WARNING, ERROR, CRITICAL
+LOG_FILE = None  # Set to filename to also log to file, e.g., "firefox_install.log"
+
+# Behavior Configuration
+REMOVE_EXISTING = True  # Remove existing Firefox package before install
+CREATE_SYMLINK = True  # Create /usr/local/bin/firefox symlink
+CREATE_DESKTOP_FILE = True  # Create desktop integration file
+VERIFY_INSTALLATION = True  # Verify Firefox after installation
