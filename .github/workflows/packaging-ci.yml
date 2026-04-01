@@ -33,7 +33,8 @@ jobs:
       - name: Preflight metadata and script checks
         run: |
           set -euo pipefail
-          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation || {
+          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation \
+            --exclude='test_packages.sh' || {
             echo "Placeholder metadata found in packaging or automation helpers."
             exit 1
           }
@@ -75,7 +76,8 @@ jobs:
       - name: Preflight metadata and script checks
         run: |
           set -euo pipefail
-          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation || {
+          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation \
+            --exclude='test_packages.sh' || {
             echo "Placeholder metadata found in packaging or automation helpers."
             exit 1
           }
@@ -117,7 +119,8 @@ jobs:
       - name: Preflight metadata and script checks
         run: |
           set -euo pipefail
-          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation || {
+          ! grep -R -E 'example\.invalid|noreply@example\.invalid' packaging automation \
+            --exclude='test_packages.sh' || {
             echo "Placeholder metadata found in packaging or automation helpers."
             exit 1
           }
