@@ -184,6 +184,26 @@ class FirefoxInstaller:
     SYMLINK_PATH = Path("/usr/local/bin/firefox")
     DESKTOP_FILE_PATH = Path("/usr/share/applications/firefox-custom.desktop")
 
+    @classmethod
+    def _ensure_directory_target(cls, path: Path, description: str) -> None:
+        if not path.exists() and not path.is_symlink():
+            return
+        if path.is_symlink():
+            raise RuntimeError(f"Refusing to replace symlinked {description}: {path}")
+        if not path.is_dir():
+            raise RuntimeError(f"Refusing to replace non-directory {description}: {path}")
+
+    @classmethod
+    def _managed_symlink_exists(cls, path: Path) -> bool:
+        if not path.is_symlink():
+            return False
+
+        target = os.readlink(path)
+        target_path = Path(target)
+        if not target_path.is_absolute():
+            target_path = (path.parent / target_path).resolve(strict=False)
+        return target_path == cls.FIREFOX_BIN
+
     def __init__(
         self,
         distro: DistroDetector,
@@ -280,8 +300,9 @@ class FirefoxInstaller:
             self.download_url,
             headers={"User-Agent": "firefox-installer-app"},
         )
+        self._validate_download_source(self.download_url)
         downloaded = 0
-        with urllib.request.urlopen(req, timeout=self.DOWNLOAD_TIMEOUT_SECONDS) as response:
+        with urllib.request.urlopen(req, timeout=self.DOWNLOAD_TIMEOUT_SECONDS) as response:  # nosec B310
             final_url = response.geturl()
             self._validate_download_source(final_url)
             self.resolved_download_url = final_url
@@ -334,7 +355,7 @@ class FirefoxInstaller:
                 checksums_url,
                 headers={"User-Agent": "firefox-installer-app"},
             )
-            with urllib.request.urlopen(req, timeout=self.DOWNLOAD_TIMEOUT_SECONDS) as response:
+            with urllib.request.urlopen(req, timeout=self.DOWNLOAD_TIMEOUT_SECONDS) as response:  # nosec B310
                 data = response.read().decode("utf-8", errors="replace")
             for line in data.splitlines():
                 line = line.strip()
@@ -397,7 +418,7 @@ class FirefoxInstaller:
                 if member.isdev():
                     raise RuntimeError(f"Archive device entry rejected: {member.name}")
 
-            tar.extractall(path=self.temp_dir)
+            tar.extractall(path=self.temp_dir)  # nosec B202
 
         extract_dir = Path(self.temp_dir) / "firefox"
         if not extract_dir.exists():
@@ -406,14 +427,23 @@ class FirefoxInstaller:
 
     def install_firefox(self, extract_dir: Path) -> None:
         self._record("INFO", f"Installing Firefox to {self.INSTALL_PREFIX}")
+        self._ensure_directory_target(self.INSTALL_PREFIX, "install prefix")
         if self.INSTALL_PREFIX.exists():
             shutil.rmtree(self.INSTALL_PREFIX)
         shutil.move(str(extract_dir), str(self.INSTALL_PREFIX))
 
     def create_symlink(self) -> None:
         self._record("INFO", f"Creating symlink at {self.SYMLINK_PATH}")
-        if self.SYMLINK_PATH.exists() or self.SYMLINK_PATH.is_symlink():
+        if self.SYMLINK_PATH.is_symlink():
+            if not self._managed_symlink_exists(self.SYMLINK_PATH):
+                raise RuntimeError(
+                    f"Refusing to replace unmanaged symlink at {self.SYMLINK_PATH}"
+                )
             self.SYMLINK_PATH.unlink()
+        elif self.SYMLINK_PATH.exists():
+            raise RuntimeError(
+                f"Refusing to replace existing non-symlink at {self.SYMLINK_PATH}"
+            )
         self.SYMLINK_PATH.symlink_to(self.FIREFOX_BIN)
 
     def create_desktop_file(self) -> None:
@@ -450,10 +480,11 @@ Keywords=web;browser;internet;www;
 
     def uninstall(self) -> None:
         self.require_root()
+        self._ensure_directory_target(self.INSTALL_PREFIX, "install prefix")
         if self.INSTALL_PREFIX.exists():
             self._record("INFO", f"Removing {self.INSTALL_PREFIX}")
             shutil.rmtree(self.INSTALL_PREFIX)
-        if self.SYMLINK_PATH.exists() or self.SYMLINK_PATH.is_symlink():
+        if self.SYMLINK_PATH.is_symlink() and self._managed_symlink_exists(self.SYMLINK_PATH):
             self._record("INFO", f"Removing {self.SYMLINK_PATH}")
             self.SYMLINK_PATH.unlink()
         if self.DESKTOP_FILE_PATH.exists():
@@ -537,6 +568,7 @@ Keywords=web;browser;internet;www;
                 ),
             )
             target_profile_root.parent.mkdir(parents=True, exist_ok=True)
+            os.chown(target_profile_root.parent, uid, gid)
             shutil.copytree(source_path, target_profile_root)
 
             self._chown_recursive(target_profile_root, uid, gid)
