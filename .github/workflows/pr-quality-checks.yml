@@ -45,7 +45,7 @@ jobs:
       - name: Python lint (ruff)
         run: |
           set -euo pipefail
-          ruff check src *.py
+          ruff check src check_readiness.py install_firefox.py
 
       - name: Security scan (bandit)
         run: |
