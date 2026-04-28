@@ -9,7 +9,8 @@ import os
 import platform
 import pwd
 import shutil
-import subprocess
+import subprocess  # nosec B404 - subprocess is used only with hardcoded absolute paths and shell=False
+import sys
 import tarfile
 import tempfile
 import urllib.request
@@ -93,15 +94,15 @@ class DistroDetector:
     """Detect Linux distribution and provide distro-specific commands."""
 
     DISTROS = {
-        "ubuntu": {"pm": "apt", "remove": ["apt", "remove", "-y", "firefox", "firefox-geckodriver"]},
-        "debian": {"pm": "apt", "remove": ["apt", "remove", "-y", "firefox", "firefox-geckodriver"]},
-        "fedora": {"pm": "dnf", "remove": ["dnf", "remove", "-y", "firefox"]},
-        "centos": {"pm": "yum", "remove": ["yum", "remove", "-y", "firefox"]},
-        "rhel": {"pm": "yum", "remove": ["yum", "remove", "-y", "firefox"]},
-        "arch": {"pm": "pacman", "remove": ["pacman", "-R", "--noconfirm", "firefox"]},
-        "manjaro": {"pm": "pacman", "remove": ["pacman", "-R", "--noconfirm", "firefox"]},
-        "opensuse": {"pm": "zypper", "remove": ["zypper", "remove", "-y", "firefox"]},
-        "alpine": {"pm": "apk", "remove": ["apk", "del", "firefox"]},
+        "ubuntu": {"pm": "/usr/bin/apt", "remove": ["/usr/bin/apt", "remove", "-y", "firefox", "firefox-geckodriver"]},
+        "debian": {"pm": "/usr/bin/apt", "remove": ["/usr/bin/apt", "remove", "-y", "firefox", "firefox-geckodriver"]},
+        "fedora": {"pm": "/usr/bin/dnf", "remove": ["/usr/bin/dnf", "remove", "-y", "firefox"]},
+        "centos": {"pm": "/usr/bin/yum", "remove": ["/usr/bin/yum", "remove", "-y", "firefox"]},
+        "rhel": {"pm": "/usr/bin/yum", "remove": ["/usr/bin/yum", "remove", "-y", "firefox"]},
+        "arch": {"pm": "/usr/bin/pacman", "remove": ["/usr/bin/pacman", "-R", "--noconfirm", "firefox"]},
+        "manjaro": {"pm": "/usr/bin/pacman", "remove": ["/usr/bin/pacman", "-R", "--noconfirm", "firefox"]},
+        "opensuse": {"pm": "/usr/bin/zypper", "remove": ["/usr/bin/zypper", "remove", "-y", "firefox"]},
+        "alpine": {"pm": "/sbin/apk", "remove": ["/sbin/apk", "del", "firefox"]},
     }
 
     def __init__(self) -> None:
@@ -263,8 +264,11 @@ class FirefoxInstaller:
     def remove_installed_firefox(self) -> None:
         self._record("INFO", f"Removing package-managed Firefox for {self.distro}")
         cmd = self.distro.get_remove_command()
+        binary = Path(cmd[0])
+        if not binary.is_absolute() or not binary.is_file():
+            raise RuntimeError(f"Package manager binary not found or not absolute path: {cmd[0]}")
         self._record("INFO", f"Running package-manager command: {' '.join(cmd)}")
-        result = subprocess.run(
+        result = subprocess.run(  # nosec B603 - cmd is a hardcoded absolute-path list from DISTROS, validated above
             cmd,
             capture_output=True,
             text=True,
@@ -418,7 +422,16 @@ class FirefoxInstaller:
                 if member.isdev():
                     raise RuntimeError(f"Archive device entry rejected: {member.name}")
 
-            tar.extractall(path=self.temp_dir)  # nosec B202
+                if member.isdir():
+                    resolved_member_path.mkdir(parents=True, exist_ok=True)
+                elif member.isfile():
+                    resolved_member_path.parent.mkdir(parents=True, exist_ok=True)
+                    file_obj = tar.extractfile(member)
+                    if file_obj is None:
+                        raise RuntimeError(f"Could not read archive member: {member.name}")
+                    with resolved_member_path.open("wb") as out:
+                        shutil.copyfileobj(file_obj, out)
+                    os.chmod(resolved_member_path, member.mode & 0o777)
 
         extract_dir = Path(self.temp_dir) / "firefox"
         if not extract_dir.exists():
@@ -466,8 +479,11 @@ Keywords=web;browser;internet;www;
 
     def verify_installation(self) -> bool:
         self._record("INFO", "Verifying Firefox installation")
-        result = subprocess.run(
-            [str(self.FIREFOX_BIN), "--version"],
+        if not self.FIREFOX_BIN.is_file():
+            self._record("ERROR", f"Firefox binary not found at {self.FIREFOX_BIN}")
+            return False
+        result = subprocess.run(  # nosec B603 - FIREFOX_BIN is a hardcoded Path constant, validated above
+            [self.FIREFOX_BIN, "--version"],
             capture_output=True,
             text=True,
             timeout=10,
@@ -518,10 +534,22 @@ Keywords=web;browser;internet;www;
             for name in files:
                 os.chown(Path(root) / name, uid, gid)
 
+    @staticmethod
+    def _safe_resolve_under(path: Path, base: Path) -> Path:
+        """Resolve path and verify it is strictly inside base. Raises RuntimeError if not."""
+        resolved = path.resolve(strict=False)
+        resolved_base = base.resolve(strict=False)
+        if resolved != resolved_base and not str(resolved).startswith(f"{resolved_base}{os.sep}"):
+            raise RuntimeError(f"Path {path} resolves outside expected directory {base}")
+        return resolved
+
     def migrate_profile_data(self) -> None:
         """Migrate Firefox profile data from Snap/Flatpak into ~/.mozilla/firefox."""
         username, home_dir, uid, gid = self._resolve_target_user()
-        target_profile_root = home_dir / ".mozilla" / "firefox"
+        resolved_home = home_dir.resolve(strict=False)
+        target_profile_root = self._safe_resolve_under(
+            resolved_home / ".mozilla" / "firefox", resolved_home
+        )
 
         # Preserve existing native profiles; migration is only needed when target is absent.
         if target_profile_root.exists():
@@ -529,12 +557,18 @@ Keywords=web;browser;internet;www;
             return
 
         migration_sources = [
-            ("snap", home_dir / "snap" / "firefox" / "common" / ".mozilla" / "firefox"),
-            ("snap-current", home_dir / "snap" / "firefox" / "current" / ".mozilla" / "firefox"),
-            ("flatpak", home_dir / ".var" / "app" / "org.mozilla.firefox" / ".mozilla" / "firefox"),
+            ("snap", resolved_home / "snap" / "firefox" / "common" / ".mozilla" / "firefox"),
+            ("snap-current", resolved_home / "snap" / "firefox" / "current" / ".mozilla" / "firefox"),
+            ("flatpak", resolved_home / ".var" / "app" / "org.mozilla.firefox" / ".mozilla" / "firefox"),
         ]
 
-        for source_name, source_path in migration_sources:
+        for source_name, raw_source_path in migration_sources:
+            try:
+                source_path = self._safe_resolve_under(raw_source_path, resolved_home)
+            except RuntimeError as exc:
+                self._record("WARNING", f"Skipping {source_name}: {exc}")
+                continue
+
             if not source_path.exists() or not source_path.is_dir():
                 continue
             if not any(source_path.iterdir()):
@@ -542,16 +576,23 @@ Keywords=web;browser;internet;www;
 
             has_symlink = False
             for root, dirs, files in os.walk(source_path):
+                root_path = Path(root)
+                try:
+                    self._safe_resolve_under(root_path, source_path)
+                except RuntimeError:
+                    has_symlink = True
+                    break
                 for name in dirs + files:
-                    if (Path(root) / name).is_symlink():
+                    entry = root_path / name
+                    if entry.is_symlink():
                         logger.warning(
                             "Skipping %s migration due to symlinked entry in source profile: %s",
                             source_name,
-                            Path(root) / name,
+                            entry,
                         )
                         if self.strict_security:
                             raise RuntimeError(
-                                f"Symlinked entry found in migration source {source_name}: {Path(root) / name}"
+                                f"Symlinked entry found in migration source {source_name}: {entry}"
                             )
                         has_symlink = True
                         break
@@ -567,8 +608,9 @@ Keywords=web;browser;internet;www;
                     f"from {source_name} path: {source_path}"
                 ),
             )
-            target_profile_root.parent.mkdir(parents=True, exist_ok=True)
-            os.chown(target_profile_root.parent, uid, gid)
+            target_parent = self._safe_resolve_under(target_profile_root.parent, resolved_home)
+            target_parent.mkdir(parents=True, exist_ok=True)
+            os.chown(target_parent, uid, gid)
             shutil.copytree(source_path, target_profile_root)
 
             self._chown_recursive(target_profile_root, uid, gid)
@@ -625,7 +667,7 @@ def run_readiness_checks() -> int:
     print("  OK" if os.geteuid() == 0 else "  Not root (sudo will be required for install)")
 
     print("\nPython:")
-    print(f"  {os.sys.version.split()[0]}")
+    print(f"  {sys.version.split()[0]}")
 
     print("\nDistribution:")
     try:
