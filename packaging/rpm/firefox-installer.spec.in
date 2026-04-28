@@ -27,7 +27,7 @@ install -m 0755 packaging/common/firefox-installer-launcher %{buildroot}/usr/bin
 %license LICENSE
 %doc README.md
 /usr/bin/firefox-installer
-/usr/lib/firefox-installer/src/firefox_installer_app
+/usr/lib/firefox-installer/src/firefox_installer_app/*.py
 
 %changelog
 * Mon Mar 30 2026 silentglasses <silentglasses@proton.me> - @VERSION@-1
