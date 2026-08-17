@@ -9,6 +9,8 @@ import sys
 from . import __version__
 from .core import DistroDetector, FirefoxInstaller, run_readiness_checks
 
+logger = logging.getLogger(__name__)
+
 
 def configure_logging(verbose: bool) -> None:
     level = logging.DEBUG if verbose else logging.INFO
@@ -132,10 +134,10 @@ def main(argv: list[str] | None = None) -> int:
         parser.print_help()
         return 2
     except PermissionError as exc:
-        logging.error(str(exc))
+        logger.error(str(exc))
         return 1
-    except Exception as exc:  # pylint: disable=broad-exception-caught
-        logging.error("Fatal error: %s", exc)
+    except Exception as exc:  # noqa: BLE001 - top-level CLI boundary must not crash on unexpected errors
+        logger.error("Fatal error: %s", exc)
         return 1
 
 
