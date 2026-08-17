@@ -16,8 +16,9 @@ import tempfile
 import urllib.request
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
-from urllib.parse import urlparse
 from pathlib import Path
+from typing import ClassVar
+from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +94,7 @@ class InstallReporter:
 class DistroDetector:
     """Detect Linux distribution and provide distro-specific commands."""
 
-    DISTROS = {
+    DISTROS: ClassVar[dict[str, dict[str, str | list[str]]]] = {
         "ubuntu": {"pm": "/usr/bin/apt", "remove": ["/usr/bin/apt", "remove", "-y", "firefox", "firefox-geckodriver"]},
         "debian": {"pm": "/usr/bin/apt", "remove": ["/usr/bin/apt", "remove", "-y", "firefox", "firefox-geckodriver"]},
         "fedora": {"pm": "/usr/bin/dnf", "remove": ["/usr/bin/dnf", "remove", "-y", "firefox"]},
@@ -152,20 +153,20 @@ class FirefoxInstaller:
     """Install and uninstall Firefox from Mozilla binaries."""
 
     DOWNLOAD_TIMEOUT_SECONDS = 120
-    ALLOWED_DOWNLOAD_HOSTS = {
+    ALLOWED_DOWNLOAD_HOSTS: ClassVar[set[str]] = {
         "download.mozilla.org",
         "download-installer.cdn.mozilla.net",
         "archive.mozilla.org",
     }
 
-    SAFE_EXEC_ENV = {
+    SAFE_EXEC_ENV: ClassVar[dict[str, str]] = {
         "PATH": "/usr/sbin:/usr/bin:/sbin:/bin",
         "LANG": "C.UTF-8",
         "LC_ALL": "C.UTF-8",
         "HOME": "/root",
     }
 
-    CHANNEL_PRODUCT_MAP = {
+    CHANNEL_PRODUCT_MAP: ClassVar[dict[str, str]] = {
         "general": "firefox-latest-ssl",
         "beta": "firefox-beta-latest-ssl",
         "nightly": "firefox-nightly-latest-ssl",
@@ -173,7 +174,7 @@ class FirefoxInstaller:
         "esr": "firefox-esr-latest-ssl",
     }
 
-    ARCH_OS_MAP = {
+    ARCH_OS_MAP: ClassVar[dict[str, str]] = {
         "x86_64": "linux64",
         "amd64": "linux64",
         "aarch64": "linux-aarch64",
@@ -273,6 +274,7 @@ class FirefoxInstaller:
             capture_output=True,
             text=True,
             env=self.SAFE_EXEC_ENV,
+            check=False,
         )
         if result.returncode != 0:
             stderr = result.stderr.strip()
@@ -487,6 +489,7 @@ Keywords=web;browser;internet;www;
             capture_output=True,
             text=True,
             timeout=10,
+            check=False,
         )
         if result.returncode == 0:
             self._record("INFO", f"Firefox verified: {result.stdout.strip()}")
@@ -648,7 +651,7 @@ Keywords=web;browser;internet;www;
             else:
                 self._record("ERROR", "Installation completed with verification failure")
             return ok
-        except Exception as exc:  # pylint: disable=broad-exception-caught
+        except Exception as exc:  # noqa: BLE001 - must catch any failure to run cleanup/reporting below
             self._record("CRITICAL", f"Installation failed: {exc}")
             return False
         finally:
@@ -673,7 +676,7 @@ def run_readiness_checks() -> int:
     try:
         distro = DistroDetector()
         print(f"  {distro} (supported)")
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - readiness check must report any detection failure, not crash
         print(f"  Unsupported: {exc}")
         return 1
 
