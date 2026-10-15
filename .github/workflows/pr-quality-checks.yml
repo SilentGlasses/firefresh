@@ -33,7 +33,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 -m pip install --upgrade pip
-          python3 -m pip install ruff bandit pip-audit build
+          python3 -m pip install ruff bandit pip-audit build pytest pytest-cov
           sudo apt-get update
           sudo apt-get install -y shellcheck
 
@@ -45,7 +45,13 @@ jobs:
       - name: Python lint (ruff)
         run: |
           set -euo pipefail
-          ruff check src check_readiness.py install_firefox.py
+          ruff check src tests check_readiness.py install_firefox.py
+
+      - name: Unit tests (pytest)
+        run: |
+          set -euo pipefail
+          python3 -m pip install -e .
+          python3 -m pytest tests/ --cov=firefox_installer_app --cov-report=term-missing
 
       - name: Security scan (bandit)
         run: |
