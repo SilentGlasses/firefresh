@@ -1,17 +1,28 @@
+# Routine version-update PRs are disabled (open-pull-requests-limit: 0) to cut
+# manual review load. Dependabot security updates are a separate GitHub feature
+# keyed off GHSA advisories, enabled in repo Settings > Code security, and are
+# NOT controlled by this file — those PRs still open immediately regardless of
+# the schedule/limit below.
 version: 2
 updates:
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 0
+    groups:
+      # init/autobuild/analyze are released together and must stay on the same
+      # version, so bump them in a single PR.
+      codeql:
+        patterns:
+          - "github/codeql-action/*"
     commit-message:
       prefix: "ci"
 
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
-      interval: "weekly"
-    open-pull-requests-limit: 10
+      interval: "monthly"
+    open-pull-requests-limit: 0
     commit-message:
       prefix: "deps"
