@@ -41,7 +41,7 @@ jobs:
           python3 -m build --sdist --wheel
 
       - name: Upload Python package artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: python-release-artifacts
           path: |
@@ -85,7 +85,7 @@ jobs:
           bash automation/test_packages.sh
 
       - name: Upload DEB and AUR artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: deb-aur-release-artifacts
           path: |
@@ -130,7 +130,7 @@ jobs:
           bash automation/test_packages.sh
 
       - name: Upload RPM artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: rpm-release-artifacts
           path: dist/*.rpm
@@ -170,7 +170,7 @@ jobs:
           ls -R dist
 
       - name: Upload aggregated workflow artifacts
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9
         with:
           name: release-packages
           path: dist/
